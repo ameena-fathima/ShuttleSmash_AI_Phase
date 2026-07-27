@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% block title %}Processing Result &mdash; ShuttleSmash AI{% endblock %}
+
+{% block content %}
+{% set risk_types = result.risks | map(attribute='risk_type') | list %}
+{% set video_rel_path = video.stored_path.split('static/')[-1] if video.stored_path else '' %}
+<div class="container py-5">
+
+  <!-- ================== Top summary hero ================== -->
+  <div class="result-hero glass-card fade-up mb-4">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+      <div>
+        <div class="section-eyebrow mb-1">Analysis Report</div>
+        <h3 class="mb-1">{{ video.original_name }}</h3>
+        <span class="text-muted"><i class="bi bi-tag me-1"></i>Video type: {{ video.video_type|capitalize }}</span>
+      </div>
+      {% if result.status == "completed" %}
+        <span class="status-pill pill-success fs-6 px-3 py-2"><i class="bi bi-check-circle"></i> Completed</span>
+      {% else %}
+        <span class="status-pill pill-danger fs-6 px-3 py-2"><i class="bi bi-x-circle"></i> Failed</span>
+      {% endif %}
+    </div>
+
+    <div class="row g-4 align-items-center">
+      <div class="col-md-3 text-center">
+        <div class="score-ring-wrap" style="width:130px;height:130px;">
+          <canvas id="resultScoreRing" width="130" height="130"></canvas>
+          <div class="score-ring-center">
+            {% if result.overall_score is not none %}
+              <div class="score-num" style="font-size:1.7rem;">{{ result.overall_score | round(0, 'floor') | int }}</div>
+              <div class="score-label">Safety Score</div>
+            {% else %}
+              <div class="score-num">&mdash;</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="col-md-9">
+        <div class="row g-3">
+          <div class="col-6 col-lg-3">
+            <div class="hero-metric">
+              <div class="text-muted small">Highest Risk</div>
+              {% if result.highest_risk_level %}
+                <span class="status-pill {% if result.highest_risk_level == 'High' %}pill-danger{% elif result.highest_risk_level == 'Moderate' %}pill-warning{% else %}pill-success{% endif %}">{{ result.highest_risk_level }}</span>
+              {% else %}
+                <span class="status-pill pill-success">None</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="hero-metric">
+              <div class="text-muted small">ML Prediction</div>
+              {% if result.ml_prediction %}
+                <span class="status-pill pill-info">{{ result.ml_prediction.label }}</span>
+              {% else %}
+                <span class="status-pill pill-neutral">Rule-Based</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="hero-metric">
+              <div class="text-muted small">Confidence</div>
+              <div class="fw-semibold" style="color:var(--ink);">
+                {% if result.ml_prediction %}{{ result.ml_prediction.confidence }}%{% else %}&mdash;{% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="hero-metric">
+              <div class="text-muted small">Performance Rating</div>
+              <div class="fw-semibold" style="color:var(--ink);">
+                {% if result.overall_score is not none %}
+                  {% if result.overall_score >= 85 %}Advanced
+                  {% elif result.overall_score >= 70 %}Intermediate
+                  {% elif result.overall_score >= 50 %}Developing
+                  {% else %}Needs Attention{% endif %}
+                {% else %}&mdash;{% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap mb-4">
+    <a href="{{ url_for('upload') }}" class="btn btn-court"><i class="bi bi-upload me-1"></i> Upload Another Video</a>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Back to Dashboard</a>
+  </div>
+
+  <!-- ================== Main layout: video column + metrics column ================== -->
+  <div class="row g-4">
+    <!-- LEFT: original video + skeleton preview -->
+    <div class="col-lg-5">
+      <div class="card stat-card p-3 mb-4 fade-up">
+        <h6 class="section-heading mb-3"><i class="bi bi-camera-video"></i> Original Video</h6>
+        {% if video_rel_path %}
+          <div class="preview-frame">
+            <video controls preload="metadata" style="width:100%; display:block; max-height:320px;">
+              <source src="{{ url_for('static', filename=video_rel_path) }}" />
+              Your browser does not support playback of this video format.
+            </video>
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">Original video file not available.</p>
+        {% endif %}
+      </div>
+
+      <div class="card stat-card p-3 fade-up fade-up-delay-1">
+        <h6 class="section-heading mb-3"><i class="bi bi-person-bounding-box"></i> Skeleton Preview</h6>
+        {% if result.preview_image_url %}
+          <div class="preview-frame">
+            <img src="{{ url_for('static', filename=result.preview_image_url) }}" alt="Pose skeleton overlay preview" />
+          </div>
+        {% else %}
+          <div class="alert alert-warning mb-0">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            No person was clearly detected in any sampled frame, so no
+            skeleton preview could be generated.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- RIGHT: overall metrics, risk cards, recommendations -->
+    <div class="col-lg-7">
+      <div class="card stat-card p-4 mb-4 fade-up">
+        <h6 class="section-heading mb-3"><i class="bi bi-info-circle"></i> Overall Metrics</h6>
+        <div class="row g-3">
+          <div class="col-6 col-md-4"><div class="text-muted small">Duration</div><div class="fw-semibold" style="color:var(--ink);">{{ result.duration_seconds }}s</div></div>
+          <div class="col-6 col-md-4"><div class="text-muted small">FPS</div><div class="fw-semibold" style="color:var(--ink);">{{ result.fps }}</div></div>
+          <div class="col-6 col-md-4"><div class="text-muted small">Resolution</div><div class="fw-semibold" style="color:var(--ink);">{{ result.resolution }}</div></div>
+          <div class="col-6 col-md-4"><div class="text-muted small">Total Frames</div><div class="fw-semibold" style="color:var(--ink);">{{ result.frame_count }}</div></div>
+          <div class="col-6 col-md-4"><div class="text-muted small">Sampled Frames</div><div class="fw-semibold" style="color:var(--ink);">{{ result.sampled_frame_count }}</div></div>
+          <div class="col-6 col-md-4"><div class="text-muted small">Person Detected</div><div class="fw-semibold" style="color:var(--ink);">{{ result.person_detected_frame_count }} / {{ result.sampled_frame_count }}</div></div>
+        </div>
+      </div>
+
+      <!-- AI Model Prediction -->
+      {% if result.ml_prediction %}
+        <div class="ml-banner ml-active d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+          <div>
+            <i class="bi bi-cpu me-2"></i>
+            <strong>ML Model Prediction:</strong> {{ result.ml_prediction.label }}
+            <span class="text-muted">({{ result.ml_prediction.confidence }}% confidence, model v{{ result.ml_prediction.model_version }})</span>
+          </div>
+          <span class="status-pill pill-info">Machine Learning</span>
+        </div>
+      {% else %}
+        <div class="ml-banner d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+          <div><i class="bi bi-cpu me-2"></i>No trained ML model yet &mdash; showing rule-based results only.</div>
+          <span class="status-pill pill-neutral">Rule-Based</span>
+        </div>
+      {% endif %}
+
+      <!-- Injury Risks -->
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h6 class="section-heading mb-0"><i class="bi bi-shield-exclamation"></i> Injury Risks</h6>
+        {% if result.overall_score is not none %}
+          <span class="status-pill pill-neutral">Overall Safety Score: {{ result.overall_score }}/100</span>
+        {% endif %}
+      </div>
+
+      {% if result.risks %}
+        <div class="row g-3 mb-4">
+          {% for risk in result.risks %}
+            <div class="col-md-6">
+              <div class="card risk-card {% if risk.risk_level == 'High' %}risk-high{% elif risk.risk_level == 'Moderate' %}risk-moderate{% else %}risk-low{% endif %}">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                  <h6 class="mb-1">
+                    {% if risk.risk_level == 'High' %}🔴{% elif risk.risk_level == 'Moderate' %}🟡{% else %}🟢{% endif %}
+                    {{ risk.risk_type }}
+                  </h6>
+                  <span class="status-pill {% if risk.risk_level == 'High' %}pill-danger{% elif risk.risk_level == 'Moderate' %}pill-warning{% else %}pill-success{% endif %}">{{ risk.risk_level }}</span>
+                </div>
+                <div class="text-muted small mb-2">Affected joint: {{ risk.affected_joint }} &bull; Confidence: {{ risk.confidence }}%</div>
+                <div class="progress-thin mb-2">
+                  <div class="progress-bar {% if risk.risk_level == 'High' %}bg-danger{% elif risk.risk_level == 'Moderate' %}bg-warning{% else %}bg-success{% endif %}" role="progressbar" style="width: {{ risk.confidence }}%;"></div>
+                </div>
+                <p class="mb-0 small">{{ risk.description }}</p>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="alert alert-success mb-4">
+          <i class="bi bi-check-circle me-2"></i>
+          {% if result.angle_summary %}No injury risks were detected in this video based on the current rule-based checks.
+          {% else %}No injury risks could be checked &mdash; no person was detected in this video.{% endif %}
+        </div>
+      {% endif %}
+
+      <!-- AI Recommendations -->
+      <h6 class="section-heading mb-3"><i class="bi bi-lightbulb"></i> AI Recommendations</h6>
+      {% if result.recommendations %}
+        <div class="row g-3">
+          {% for rec in result.recommendations %}
+            <div class="col-md-6">
+              <div class="card recommendation-card">
+                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                  <span class="status-pill pill-neutral">{{ rec.category }}</span>
+                  <span class="status-pill {% if rec.priority == 'High' %}pill-danger{% elif rec.priority == 'Medium' %}pill-warning{% else %}pill-success{% endif %}">{{ rec.priority }} priority</span>
+                </div>
+                <p class="mb-0 small"><i class="bi bi-quote me-1 text-muted"></i>{{ rec.recommendation }}</p>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted">No recommendations to show for this video.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ================== AI Summary panel ================== -->
+  <div class="card ai-summary-card p-4 mt-4 fade-up">
+    <h6 class="section-heading mb-3"><i class="bi bi-stars"></i> AI Summary</h6>
+    <div class="row g-4">
+      <div class="col-md-6">
+        <div class="summary-label summary-label-good"><i class="bi bi-check-circle-fill"></i> Strengths</div>
+        <ul class="summary-list">
+          {% if result.angle_summary %}
+            {% if 'Knee Valgus Risk' not in risk_types %}<li>✓ Balanced Knee Alignment</li>{% endif %}
+            {% if 'Asymmetrical Loading' not in risk_types %}<li>✓ Even Left/Right Loading</li>{% endif %}
+            {% if video.video_type == 'jump' and 'Poor Landing Technique' not in risk_types %}<li>✓ Stable Landing Mechanics</li>{% endif %}
+            {% if video.video_type == 'smash' and 'Shoulder Overextension' not in risk_types %}<li>✓ Controlled Shoulder Extension</li>{% endif %}
+            {% if video.video_type == 'lunge' and 'Lunge Overreach' not in risk_types %}<li>✓ Good Lunge Depth Control</li>{% endif %}
+            {% if result.risks|length == 0 %}<li>✓ No Injury Risks Detected</li>{% endif %}
+          {% else %}
+            <li class="text-muted">No pose data detected &mdash; strengths unavailable.</li>
+          {% endif %}
+        </ul>
+      </div>
+      <div class="col-md-6">
+        <div class="summary-label summary-label-warn"><i class="bi bi-exclamation-circle-fill"></i> Needs Improvement</div>
+        <ul class="summary-list">
+          {% if result.risks %}
+            {% for risk in result.risks %}
+              <li>&bull; {{ risk.risk_type }}</li>
+            {% endfor %}
+          {% else %}
+            <li class="text-muted">Nothing flagged &mdash; keep up the good work.</li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+    <hr class="footer-divider" />
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span class="text-muted small">Overall Rating</span>
+      <span class="status-pill pill-info fs-6 px-3 py-2">
+        {% if result.overall_score is not none %}
+          {% if result.overall_score >= 85 %}Advanced Athlete
+          {% elif result.overall_score >= 70 %}Intermediate Athlete
+          {% elif result.overall_score >= 50 %}Developing Athlete
+          {% else %}Needs Attention{% endif %}
+        {% else %}Not Enough Data{% endif %}
+      </span>
+    </div>
+  </div>
+
+  <!-- ================== Joint Angles + Movement Metrics ================== -->
+  <div class="row g-4 mt-1">
+    <div class="col-lg-6">
+      <div class="card stat-card p-4 h-100 fade-up">
+        <h6 class="section-heading mb-3"><i class="bi bi-rulers"></i> Joint Angles (degrees)</h6>
+        {% if result.angle_summary %}
+          <div class="table-responsive">
+            <table class="table table-sm metric-table mb-0">
+              <thead>
+                <tr><th>Joint</th><th class="text-end">Avg</th><th class="text-end">Min</th><th class="text-end">Max</th></tr>
+              </thead>
+              <tbody>
+                {% for angle_name, stats in result.angle_summary.items() %}
+                <tr>
+                  <td class="text-capitalize">{{ angle_name.replace('_', ' ') }}</td>
+                  <td class="text-end">{{ stats.avg if stats.avg is not none else '—' }}</td>
+                  <td class="text-end">{{ stats.min if stats.min is not none else '—' }}</td>
+                  <td class="text-end">{{ stats.max if stats.max is not none else '—' }}</td>
+                </tr>
+                {% if stats.avg is not none %}
+                <tr>
+                  <td colspan="4" class="pt-0">
+                    <div class="progress-thin">
+                      <div class="progress-bar bg-info" role="progressbar" style="width: {{ [(stats.avg / 180 * 100), 100] | min }}%;"></div>
+                    </div>
+                  </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="form-text mt-2">Averaged across all sampled frames where a person was detected.</div>
+        {% else %}
+          <p class="text-muted mb-0">No joint angles available — no person was clearly detected in any sampled frame.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card stat-card p-4 h-100 fade-up fade-up-delay-1">
+        <h6 class="section-heading mb-3"><i class="bi bi-activity"></i> {{ result.video_type|capitalize }} Metrics</h6>
+        {% if result.movement_metrics %}
+          <div class="metric-card-grid">
+            {% for key, value in result.movement_metrics.items() %}
+              <div class="metric-mini-card">
+                <div class="text-muted small">{{ key.replace('_', ' ')|capitalize }}</div>
+                <div class="fw-bold" style="color:var(--ink);">{{ value if value is not none else '—' }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">
+            {% if result.video_type == 'general' %}
+              Movement-specific metrics are only computed for Smash, Footwork, Jump, or Lunge video types. Upload a tagged video to see them here.
+            {% else %}
+              Not enough pose data was detected in this video to compute {{ result.video_type }} metrics.
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info mt-5 mb-0">
+    <i class="bi bi-info-circle me-2"></i>
+    Injury-risk checks here are explainable, rule-based logic (not a
+    trained model) based on the joint angles and movement metrics above.
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    if (typeof Chart === "undefined") return;
+    var ctx = document.getElementById('resultScoreRing');
+    if (!ctx) return;
+    var score = {{ (result.overall_score if result.overall_score is not none else 0) | tojson }};
+    var hasScore = {{ 'true' if result.overall_score is not none else 'false' }};
+    var ringColor = score >= 80 ? '#16d19f' : (score >= 50 ? '#ffc93c' : '#ff5470');
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: { datasets: [{
+        data: hasScore ? [score, 100 - score] : [1, 0],
+        backgroundColor: hasScore ? [ringColor, 'rgba(255,255,255,0.08)'] : ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0)'],
+        borderWidth: 0,
+      }] },
+      options: { cutout: '76%', responsive: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { animateRotate: true, duration: 900 } }
+    });
+  })();
+</script>
+{% endblock %}

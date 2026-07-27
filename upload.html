@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Upload Video &mdash; ShuttleSmash AI{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="card auth-card p-4 p-md-5 fade-up" style="max-width: 640px;">
+    <h3 class="mb-1">Upload a video</h3>
+    <p class="text-muted mb-4">
+      We'll sample your video and run pose detection to prepare it for
+      analysis.
+    </p>
+
+    <form method="POST" action="{{ url_for('upload') }}" enctype="multipart/form-data" novalidate id="uploadForm">
+      <div class="mb-4">
+        <label for="video_type" class="form-label">What does this video show?</label>
+        <select class="form-select" id="video_type" name="video_type" required>
+          <option value="general" selected>General play</option>
+          <option value="smash">Smash</option>
+          <option value="footwork">Footwork</option>
+          <option value="jump">Jump</option>
+          <option value="lunge">Lunge</option>
+        </select>
+        <div class="form-text">
+          This tells ShuttleSmash AI which movement-analysis module to run
+          in a later step.
+        </div>
+      </div>
+
+      <label class="form-label">Video file</label>
+
+      <!-- Premium drag & drop zone. The real <input type="file"> is
+           kept in the DOM (just visually hidden) so the form submits
+           exactly the same multipart/form-data payload the backend has
+           always expected -- this is presentation only. -->
+      <div class="dropzone" id="dropzone">
+        <div class="dropzone-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+        <h5>Drag &amp; drop your video here</h5>
+        <p>or <span class="browse-link">browse from your device</span></p>
+      </div>
+      <input
+        type="file"
+        id="video_file"
+        name="video_file"
+        accept=".mp4,.avi,.mov"
+        required
+        style="position:absolute; width:1px; height:1px; opacity:0; overflow:hidden;"
+      />
+
+      <div class="video-preview-box mt-3" id="previewBox">
+        <video id="previewVideo" muted controls></video>
+        <div class="file-meta-row">
+          <span class="file-name" id="fileName">&mdash;</span>
+          <span id="fileSize">&mdash;</span>
+        </div>
+      </div>
+
+      <div class="form-text mt-2 mb-4">
+        Accepted formats: MP4, AVI, MOV &bull; Maximum size: 100 MB
+      </div>
+
+      <button type="submit" class="btn btn-court btn-lg w-100" id="submitBtn">
+        <i class="bi bi-upload me-1"></i> Upload &amp; Process
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Full-screen processing overlay, shown while the real form POST is
+     in flight. The form is NOT intercepted (no preventDefault / AJAX) --
+     the browser performs the exact same multipart upload + full-page
+     response it always has; this overlay is purely a loading visual,
+     cycling through the pipeline stages, shown while waiting for that
+     real response to arrive (the cycle duration is cosmetic/simulated,
+     since the backend responds once, synchronously, with no live
+     progress events -- it does not claim to reflect true server state). -->
+<div class="processing-overlay" id="processingOverlay">
+  <div class="processing-spinner"></div>
+  <h5>Analyzing your video&hellip;</h5>
+  <p>Running the full ShuttleSmash AI pipeline. This can take a moment for longer clips.</p>
+
+  <div class="pipeline-track">
+    <div class="pipeline-step" data-step="0"><i class="bi bi-cloud-check"></i><span>Upload Complete</span></div>
+    <div class="pipeline-step" data-step="1"><i class="bi bi-film"></i><span>Extract Frames</span></div>
+    <div class="pipeline-step" data-step="2"><i class="bi bi-person-bounding-box"></i><span>Pose Detection</span></div>
+    <div class="pipeline-step" data-step="3"><i class="bi bi-activity"></i><span>Movement Analysis</span></div>
+    <div class="pipeline-step" data-step="4"><i class="bi bi-shield-exclamation"></i><span>Injury Detection</span></div>
+    <div class="pipeline-step" data-step="5"><i class="bi bi-cpu"></i><span>ML Prediction</span></div>
+    <div class="pipeline-step" data-step="6"><i class="bi bi-file-earmark-bar-graph"></i><span>Generate Report</span></div>
+  </div>
+
+  <div class="pipeline-progress-track mt-3">
+    <div class="pipeline-progress-fill" id="pipelineProgressFill"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var dropzone = document.getElementById("dropzone");
+    var fileInput = document.getElementById("video_file");
+    var previewBox = document.getElementById("previewBox");
+    var previewVideo = document.getElementById("previewVideo");
+    var fileNameEl = document.getElementById("fileName");
+    var fileSizeEl = document.getElementById("fileSize");
+    var form = document.getElementById("uploadForm");
+    var submitBtn = document.getElementById("submitBtn");
+    var overlay = document.getElementById("processingOverlay");
+
+    function formatSize(bytes) {
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + " KB";
+      return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    }
+
+    function showPreview(file) {
+      if (!file) return;
+      fileNameEl.textContent = file.name;
+      fileSizeEl.textContent = formatSize(file.size);
+      previewVideo.src = URL.createObjectURL(file);
+      previewBox.style.display = "block";
+    }
+
+    // Click / keyboard: open the native file picker
+    dropzone.addEventListener("click", function () {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", function () {
+      if (fileInput.files && fileInput.files[0]) {
+        showPreview(fileInput.files[0]);
+      }
+    });
+
+    // Drag & drop visuals + wiring the dropped file into the real input
+    ["dragenter", "dragover"].forEach(function (evt) {
+      dropzone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add("dragover");
+      });
+    });
+    ["dragleave", "drop"].forEach(function (evt) {
+      dropzone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove("dragover");
+      });
+    });
+    dropzone.addEventListener("drop", function (e) {
+      var dt = e.dataTransfer;
+      if (dt && dt.files && dt.files.length) {
+        fileInput.files = dt.files;
+        showPreview(dt.files[0]);
+      }
+    });
+
+    // Let the form submit exactly as before (real multipart POST) --
+    // just show the processing overlay while the browser waits for the
+    // server's response, and guard against a double submit.
+    form.addEventListener("submit", function () {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Uploading...';
+      overlay.classList.add("active");
+      startPipelineAnimation();
+    });
+
+    // Cosmetic, cycling pipeline animation -- the real backend processes
+    // the video synchronously in a single request/response (no live
+    // progress events), so this steps through the known pipeline stages
+    // on a timer purely to keep the wait feeling responsive. It never
+    // claims to reflect a specific measured backend state.
+    function startPipelineAnimation() {
+      var steps = document.querySelectorAll(".pipeline-step");
+      var fill = document.getElementById("pipelineProgressFill");
+      var current = 0;
+
+      function activate(index) {
+        steps.forEach(function (el, i) {
+          el.classList.remove("active", "done");
+          if (i < index) el.classList.add("done");
+          if (i === index) el.classList.add("active");
+        });
+        var pct = Math.min(((index + 1) / steps.length) * 100, 96); // hold under 100% until the real response lands
+        if (fill) fill.style.width = pct + "%";
+      }
+
+      activate(0);
+      var timer = setInterval(function () {
+        current += 1;
+        if (current >= steps.length) {
+          clearInterval(timer);
+          return;
+        }
+        activate(current);
+      }, 900);
+    }
+  })();
+</script>
+{% endblock %}
