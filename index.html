@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}ShuttleSmash AI &mdash; Badminton Performance & Injury Risk Analysis{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge fade-up">
+      <i class="bi bi-stars"></i> AI-Powered Sports Analytics
+    </div>
+    <h1 class="fade-up fade-up-delay-1">
+      Play smarter.<br class="d-none d-md-block" />
+      <span class="gradient-text">Smash safer.</span>
+    </h1>
+    <p class="lead col-lg-8 mx-auto fade-up fade-up-delay-2">
+      Upload a video of your badminton game and let ShuttleSmash AI break down your
+      footwork, smash form, jumps, and lunges &mdash; then flag injury-risk patterns
+      before they become injuries.
+    </p>
+    <div class="d-flex justify-content-center gap-3 mt-4 flex-wrap fade-up fade-up-delay-3">
+      <a href="{{ url_for('register') }}" class="btn btn-shuttle btn-lg px-4">
+        <i class="bi bi-rocket-takeoff me-1"></i> Get Started Free
+      </a>
+      <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-lg px-4">
+        I already have an account
+      </a>
+    </div>
+
+    <div class="hero-stats fade-up fade-up-delay-4">
+      <div class="stat">
+        <div class="num">33</div>
+        <div class="label">Body Landmarks</div>
+      </div>
+      <div class="stat">
+        <div class="num">5</div>
+        <div class="label">Injury Risk Checks</div>
+      </div>
+      <div class="stat">
+        <div class="num">4</div>
+        <div class="label">Movement Types</div>
+      </div>
+      <div class="stat">
+        <div class="num">AI</div>
+        <div class="label">+ Rule-Based Engine</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="container py-5">
+  <div class="text-center mb-5">
+    <div class="section-eyebrow mb-2">Capabilities</div>
+    <h2 class="section-title">What ShuttleSmash AI analyzes</h2>
+    <p class="section-subtitle">Powered by MediaPipe pose estimation, biomechanics-based rules, and machine learning</p>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-md-4">
+      <div class="card feature-card fade-up">
+        <div class="feature-icon"><i class="bi bi-person-arms-up"></i></div>
+        <h5>Smash Posture</h5>
+        <p class="mb-0">Arm-swing angle, trunk rotation, and contact-point timing on your smash.</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card feature-card fade-up fade-up-delay-1">
+        <div class="feature-icon"><i class="bi bi-lightning-charge"></i></div>
+        <h5>Footwork &amp; Jumps</h5>
+        <p class="mb-0">Split-step timing, court coverage, jump height, and landing symmetry.</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card feature-card fade-up fade-up-delay-2">
+        <div class="feature-icon"><i class="bi bi-shield-check"></i></div>
+        <h5>Injury Risk Detection</h5>
+        <p class="mb-0">Rule-based flags for knee valgus, overreach, and asymmetric loading &mdash; plus an optional trained ML model.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="container py-5">
+  <div class="text-center mb-5">
+    <div class="section-eyebrow mb-2">Workflow</div>
+    <h2 class="section-title">How ShuttleSmash AI works</h2>
+    <p class="section-subtitle">From raw footage to an AI-backed injury-risk report in one upload</p>
+  </div>
+
+  <div class="workflow-track">
+    <div class="workflow-step fade-up">
+      <div class="workflow-num">1</div>
+      <div class="workflow-icon"><i class="bi bi-cloud-upload"></i></div>
+      <h6>Upload Footage</h6>
+      <p>Drop in a smash, footwork, jump, or lunge clip.</p>
+    </div>
+    <div class="workflow-arrow"><i class="bi bi-arrow-right"></i></div>
+    <div class="workflow-step fade-up fade-up-delay-1">
+      <div class="workflow-num">2</div>
+      <div class="workflow-icon"><i class="bi bi-person-bounding-box"></i></div>
+      <h6>Pose Detection</h6>
+      <p>MediaPipe extracts 33 body landmarks per frame.</p>
+    </div>
+    <div class="workflow-arrow"><i class="bi bi-arrow-right"></i></div>
+    <div class="workflow-step fade-up fade-up-delay-2">
+      <div class="workflow-num">3</div>
+      <div class="workflow-icon"><i class="bi bi-rulers"></i></div>
+      <h6>Movement Analysis</h6>
+      <p>Joint angles and technique metrics are calculated.</p>
+    </div>
+    <div class="workflow-arrow"><i class="bi bi-arrow-right"></i></div>
+    <div class="workflow-step fade-up fade-up-delay-3">
+      <div class="workflow-num">4</div>
+      <div class="workflow-icon"><i class="bi bi-shield-exclamation"></i></div>
+      <h6>Injury Risk + AI</h6>
+      <p>Rule-based checks and an optional ML model flag risks.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}

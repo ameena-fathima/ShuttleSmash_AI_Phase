@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+{% block title %}Dashboard &mdash; ShuttleSmash AI{% endblock %}
+
+{% block content %}
+<div class="container page-header d-flex justify-content-between align-items-end flex-wrap gap-3">
+  <div>
+    <h2>Welcome back, {{ user.full_name }} <span style="font-size:1.5rem;">👋</span></h2>
+    <p class="text-muted mb-0">Here's a snapshot of your ShuttleSmash AI performance data.</p>
+  </div>
+  <div class="quick-actions">
+    <a href="{{ url_for('upload') }}" class="btn btn-shuttle btn-sm"><i class="bi bi-cloud-upload me-1"></i>Upload</a>
+    <a href="#recent-sessions" class="btn btn-outline-light btn-sm"><i class="bi bi-clock-history me-1"></i>History</a>
+    <button type="button" class="btn btn-outline-light btn-sm" disabled title="Coming soon">
+      <i class="bi bi-file-earmark-arrow-down me-1"></i>Export
+    </button>
+  </div>
+</div>
+
+<div class="container pb-5">
+  <!-- ================== Top statistic cards ================== -->
+  <div class="row g-4 mt-1">
+    <div class="col-md-4 col-6">
+      <div class="card stat-card fade-up">
+        <div class="stat-icon stat-icon-green"><i class="bi bi-camera-reels"></i></div>
+        <div class="text-muted small">Total Analyses</div>
+        <div class="stat-value" data-counter="{{ dashboard_analytics.total_analyses }}">0</div>
+      </div>
+    </div>
+    <div class="col-md-4 col-6">
+      <div class="card stat-card fade-up fade-up-delay-1">
+        <div class="stat-icon stat-icon-cyan"><i class="bi bi-graph-up"></i></div>
+        <div class="text-muted small">Average Score</div>
+        {% if dashboard_analytics.average_score is not none %}
+          <div class="stat-value">{{ dashboard_analytics.average_score }}<span class="fs-6 text-muted">/100</span></div>
+        {% else %}
+          <div class="stat-value">&mdash;</div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-md-4 col-6">
+      <div class="card stat-card fade-up fade-up-delay-2">
+        <div class="stat-icon stat-icon-violet"><i class="bi bi-trophy"></i></div>
+        <div class="text-muted small">Highest Score</div>
+        {% if dashboard_analytics.highest_score is not none %}
+          <div class="stat-value">{{ dashboard_analytics.highest_score }}<span class="fs-6 text-muted">/100</span></div>
+        {% else %}
+          <div class="stat-value">&mdash;</div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-md-4 col-6">
+      <div class="card stat-card fade-up">
+        <div class="stat-icon stat-icon-amber"><i class="bi bi-exclamation-triangle"></i></div>
+        <div class="text-muted small">High Risk Sessions</div>
+        <div class="stat-value">{{ dashboard_analytics.high_risk_count }}</div>
+      </div>
+    </div>
+    <div class="col-md-4 col-6">
+      <div class="card stat-card fade-up fade-up-delay-1">
+        <div class="stat-icon stat-icon-green"><i class="bi bi-arrow-up-right-circle"></i></div>
+        <div class="text-muted small">Improvement</div>
+        {% if dashboard_analytics.improvement_percent is not none %}
+          <div class="stat-value {% if dashboard_analytics.improvement_percent < 0 %}text-danger-value{% endif %}">
+            {{ '+' if dashboard_analytics.improvement_percent >= 0 else '' }}{{ dashboard_analytics.improvement_percent }}%
+          </div>
+        {% else %}
+          <div class="stat-value">&mdash;</div>
+          <div class="text-muted small mt-1">Analyze a few more videos</div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-md-4 col-6">
+      <div class="card stat-card fade-up fade-up-delay-2">
+        <div class="stat-icon stat-icon-cyan"><i class="bi bi-cpu"></i></div>
+        <div class="text-muted small">Prediction Source</div>
+        <div class="stat-value fs-4">
+          {% if analysis_summary %}{{ analysis_summary.prediction_source }}{% else %}&mdash;{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================== Charts ================== -->
+  <div class="row g-4 mt-1">
+    <div class="col-lg-4">
+      <div class="card stat-card h-100 fade-up">
+        <h6 class="fw-bold mb-3" style="color:var(--ink);">Safety Score</h6>
+        <div class="score-ring-wrap">
+          <canvas id="safetyScoreRing" width="160" height="160"></canvas>
+          <div class="score-ring-center">
+            {% if analysis_summary and analysis_summary.overall_score is not none %}
+              <div class="score-num">{{ analysis_summary.overall_score | round(0, 'floor') | int }}</div>
+              <div class="score-label">out of 100</div>
+            {% else %}
+              <div class="score-num">&mdash;</div>
+              <div class="score-label">no data yet</div>
+            {% endif %}
+          </div>
+        </div>
+        <p class="text-center text-muted small mt-3 mb-0">Most recently analyzed session.</p>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card stat-card h-100 fade-up fade-up-delay-1">
+        <h6 class="fw-bold mb-3" style="color:var(--ink);">Safety Score Trend</h6>
+        {% if dashboard_analytics.score_trend|length > 1 %}
+          <canvas id="scoreTrendChart" height="180"></canvas>
+        {% else %}
+          <div class="chart-empty">
+            <i class="bi bi-graph-up"></i>
+            <p>Analyze a few more videos to see your score trend over time.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card stat-card h-100 fade-up fade-up-delay-2">
+        <h6 class="fw-bold mb-3" style="color:var(--ink);">Risk Distribution</h6>
+        {% if dashboard_analytics.total_analyses > 0 %}
+          <canvas id="riskDistributionChart" height="180"></canvas>
+        {% else %}
+          <div class="chart-empty">
+            <i class="bi bi-pie-chart"></i>
+            <p>No analyses yet &mdash; upload a video to get started.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mt-1">
+    <div class="col-12">
+      <div class="card stat-card fade-up">
+        <h6 class="fw-bold mb-3" style="color:var(--ink);">Weekly Activity</h6>
+        {% if dashboard_analytics.weekly_activity|length > 0 %}
+          <canvas id="weeklyActivityChart" height="90"></canvas>
+        {% else %}
+          <div class="chart-empty">
+            <i class="bi bi-bar-chart"></i>
+            <p>Your upload activity will appear here once you start analyzing videos.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ================== Recent Sessions ================== -->
+  <div id="recent-sessions" class="d-flex justify-content-between align-items-center mt-5 mb-3 flex-wrap gap-2">
+    <h4 class="section-heading mb-0"><i class="bi bi-collection-play"></i> Recent Sessions</h4>
+    <a href="{{ url_for('upload') }}" class="btn btn-sm btn-outline-light"><i class="bi bi-plus-lg me-1"></i>New Analysis</a>
+  </div>
+
+  {% if dashboard_analytics.recent_sessions %}
+    <div class="row g-4">
+      {% for session_item in dashboard_analytics.recent_sessions %}
+        <div class="col-md-6 col-lg-4">
+          <div class="card session-card fade-up">
+            <div class="session-thumb">
+              {% if session_item.preview %}
+                <img src="{{ url_for('static', filename=session_item.preview) }}" alt="Skeleton preview" />
+              {% else %}
+                <div class="session-thumb-placeholder"><i class="bi bi-person-bounding-box"></i></div>
+              {% endif %}
+              {% if session_item.status == "completed" %}
+                <span class="status-pill pill-success session-badge">Completed</span>
+              {% elif session_item.status == "failed" %}
+                <span class="status-pill pill-danger session-badge">Failed</span>
+              {% elif session_item.status == "processing" %}
+                <span class="status-pill pill-warning session-badge">Processing</span>
+              {% else %}
+                <span class="status-pill pill-neutral session-badge">Uploaded</span>
+              {% endif %}
+            </div>
+            <div class="p-3">
+              <div class="fw-semibold text-truncate" style="color:var(--ink);" title="{{ session_item.name }}">{{ session_item.name }}</div>
+              <div class="text-muted small mb-2">
+                {{ session_item.video_type|capitalize }} &bull; {{ session_item.date.split(' ')[0] if session_item.date else '—' }}
+              </div>
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted small">Overall Score</span>
+                <span class="fw-bold" style="color:var(--ink);">
+                  {{ session_item.score if session_item.score is not none else '—' }}{% if session_item.score is not none %}/100{% endif %}
+                </span>
+              </div>
+              {% if session_item.score is not none %}
+                <div class="progress-thin mb-3">
+                  <div class="progress-bar {% if session_item.score >= 80 %}bg-success{% elif session_item.score >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                       role="progressbar" style="width: {{ session_item.score }}%;"></div>
+                </div>
+              {% endif %}
+              <div class="d-flex justify-content-between align-items-center">
+                {% if session_item.prediction %}
+                  <span class="status-pill pill-info"><i class="bi bi-cpu"></i> {{ session_item.prediction.label }}</span>
+                {% else %}
+                  <span class="status-pill pill-neutral">Rule-Based</span>
+                {% endif %}
+                <a href="{{ url_for('view_video_result', video_id=session_item.video_id) }}" class="btn btn-sm btn-court">
+                  View Report
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state fade-up">
+      <div class="empty-state-icon"><i class="bi bi-camera-reels"></i></div>
+      <h5>No sessions yet</h5>
+      <p>Upload your first badminton video to see pose analysis, injury risk detection, and AI recommendations here.</p>
+      <a href="{{ url_for('upload') }}" class="btn btn-shuttle mt-2">
+        <i class="bi bi-cloud-upload me-1"></i> Upload Your First Video
+      </a>
+    </div>
+  {% endif %}
+
+  <!-- ================== ML Model Status (Phase 5) ================== -->
+  <div class="card ml-card p-4 mt-5 fade-up">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+      <h6 class="fw-bold mb-0 d-flex align-items-center gap-2" style="color:var(--ink);">
+        <i class="bi bi-cpu" style="color:var(--cyan);"></i> AI Model Status
+      </h6>
+      {% if model_status.status == "Trained" %}
+        <span class="status-pill pill-info"><i class="bi bi-check-circle"></i> Trained</span>
+      {% else %}
+        <span class="status-pill pill-neutral"><i class="bi bi-dash-circle"></i> Not Trained</span>
+      {% endif %}
+    </div>
+
+    <div class="row g-3 text-center">
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Model Version</div>
+        <div class="fw-semibold" style="color:var(--ink);">{{ model_status.model_version or '—' }}</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Training Date</div>
+        <div class="fw-semibold" style="color:var(--ink);">
+          {{ model_status.trained_at.split('T')[0] if model_status.trained_at else '—' }}
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Accuracy</div>
+        <div class="fw-semibold" style="color:var(--ink);">
+          {{ (model_status.accuracy * 100) | round(1) if model_status.accuracy is not none else '—' }}{{ '%' if model_status.accuracy is not none else '' }}
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Latest Prediction Source</div>
+        <div class="fw-semibold" style="color:var(--ink);">
+          {% if analysis_summary %}{{ analysis_summary.prediction_source }}{% else %}&mdash;{% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% if model_status.status != "Trained" %}
+      <p class="text-muted small mb-0 mt-3">
+        No trained model yet &mdash; the app is using the rule-based
+        injury-risk engine. Run <code>python training/train_model.py</code>
+        to train one (see <code>docs/ML_GUIDE.md</code>).
+      </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    if (typeof Chart === "undefined") return;
+    Chart.defaults.color = "#9aa7b8";
+    Chart.defaults.font.family = "Inter, sans-serif";
+
+    // ---- Safety score ring (existing single-value ring, unchanged data source) ----
+    var ringCtx = document.getElementById('safetyScoreRing');
+    if (ringCtx) {
+      var score = {{ (analysis_summary.overall_score if analysis_summary and analysis_summary.overall_score is not none else 0) | tojson }};
+      var hasScore = {{ 'true' if (analysis_summary and analysis_summary.overall_score is not none) else 'false' }};
+      var ringColor = score >= 80 ? '#16d19f' : (score >= 50 ? '#ffc93c' : '#ff5470');
+      new Chart(ringCtx, {
+        type: 'doughnut',
+        data: { datasets: [{
+          data: hasScore ? [score, 100 - score] : [1, 0],
+          backgroundColor: hasScore ? [ringColor, 'rgba(255,255,255,0.08)'] : ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0)'],
+          borderWidth: 0,
+        }] },
+        options: { cutout: '78%', responsive: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { animateRotate: true, duration: 900 } }
+      });
+    }
+
+    // ---- Safety score trend (line) ----
+    var trendCtx = document.getElementById('scoreTrendChart');
+    if (trendCtx) {
+      var trend = {{ dashboard_analytics.score_trend | tojson }};
+      new Chart(trendCtx, {
+        type: 'line',
+        data: {
+          labels: trend.map(function (t) { return t.date ? t.date.split(' ')[0].slice(5) : ''; }),
+          datasets: [{
+            label: 'Overall Score',
+            data: trend.map(function (t) { return t.score; }),
+            borderColor: '#16d19f',
+            backgroundColor: 'rgba(22,209,159,0.15)',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 3,
+            pointBackgroundColor: '#16d19f',
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.06)' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    // ---- Risk distribution (doughnut) ----
+    var riskCtx = document.getElementById('riskDistributionChart');
+    if (riskCtx) {
+      var dist = {{ dashboard_analytics.risk_distribution | tojson }};
+      new Chart(riskCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Low', 'Moderate', 'High'],
+          datasets: [{
+            data: [dist.Low || 0, dist.Moderate || 0, dist.High || 0],
+            backgroundColor: ['#16d19f', '#ffc93c', '#ff5470'],
+            borderWidth: 0,
+          }]
+        },
+        options: {
+          cutout: '65%',
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 14 } } }
+        }
+      });
+    }
+
+    // ---- Weekly activity (bar) ----
+    var weeklyCtx = document.getElementById('weeklyActivityChart');
+    if (weeklyCtx) {
+      var weekly = {{ dashboard_analytics.weekly_activity | tojson }};
+      new Chart(weeklyCtx, {
+        type: 'bar',
+        data: {
+          labels: weekly.map(function (w) { return w.week; }),
+          datasets: [{
+            label: 'Analyses',
+            data: weekly.map(function (w) { return w.count; }),
+            backgroundColor: 'rgba(63,184,255,0.55)',
+            borderRadius: 6,
+            maxBarThickness: 36,
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(255,255,255,0.06)' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    // ---- Animated counters for stat cards ----
+    document.querySelectorAll('[data-counter]').forEach(function (el) {
+      var target = parseInt(el.getAttribute('data-counter'), 10) || 0;
+      var current = 0;
+      var step = Math.max(1, Math.ceil(target / 30));
+      var timer = setInterval(function () {
+        current += step;
+        if (current >= target) { current = target; clearInterval(timer); }
+        el.textContent = current;
+      }, 25);
+    });
+  })();
+</script>
+{% endblock %}
