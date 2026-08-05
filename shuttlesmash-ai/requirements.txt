@@ -1,0 +1,28 @@
+# ShuttleSmash AI - Python dependencies
+# Install with: pip install -r requirements.txt
+
+# --- Web framework ---
+Flask==3.0.3
+Werkzeug==3.0.3
+
+# --- Computer vision / pose estimation (used from Phase 2 onward) ---
+opencv-python==4.10.0.84
+# IMPORTANT: pin exactly this version. mediapipe 0.10.22+ (including the
+# latest release) removed the legacy `mediapipe.solutions` API that this
+# project uses (mp.solutions.pose) in some published wheels, causing
+# "AttributeError: module 'mediapipe' has no attribute 'solutions'" on
+# import. 0.10.21 is the newest version confirmed to still include it.
+# See: https://github.com/google-ai-edge/mediapipe/issues/6192
+mediapipe==0.10.21
+
+# --- Numerical / data handling ---
+numpy==1.26.4
+pandas==2.2.2
+
+# --- Charts & PDF report generation (used from Phase 5 onward) ---
+matplotlib==3.9.0
+reportlab==4.2.2
+
+# --- Machine learning (Phase 5: injury-risk classifier) ---
+scikit-learn==1.5.2
+joblib==1.4.2

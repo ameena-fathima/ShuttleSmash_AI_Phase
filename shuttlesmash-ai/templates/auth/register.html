@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Sign Up &mdash; ShuttleSmash AI{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="card auth-card p-4 p-md-5 fade-up">
+    <div class="brand-mark mb-3" style="width:48px;height:48px;font-size:1.3rem;">
+      <i class="bi bi-person-plus-fill"></i>
+    </div>
+    <h3 class="mb-1">Create your account</h3>
+    <p class="text-muted mb-4">Start tracking your technique and injury risk today.</p>
+
+    <form method="POST" action="{{ url_for('register') }}" novalidate>
+      <div class="mb-3">
+        <label for="full_name" class="form-label">Full Name</label>
+        <input
+          type="text"
+          class="form-control"
+          id="full_name"
+          name="full_name"
+          value="{{ full_name or '' }}"
+          required
+          autofocus
+        />
+      </div>
+
+      <div class="mb-3">
+        <label for="username" class="form-label">Username</label>
+        <input
+          type="text"
+          class="form-control"
+          id="username"
+          name="username"
+          value="{{ username or '' }}"
+          placeholder="3-20 characters, letters/numbers/underscore"
+          required
+        />
+      </div>
+
+      <div class="mb-3">
+        <label for="email" class="form-label">Email</label>
+        <input
+          type="email"
+          class="form-control"
+          id="email"
+          name="email"
+          value="{{ email or '' }}"
+          required
+        />
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label for="password" class="form-label">Password</label>
+          <input
+            type="password"
+            class="form-control"
+            id="password"
+            name="password"
+            placeholder="At least 6 characters"
+            required
+          />
+        </div>
+        <div class="col-md-6 mb-3">
+          <label for="confirm_password" class="form-label">Confirm Password</label>
+          <input
+            type="password"
+            class="form-control"
+            id="confirm_password"
+            name="confirm_password"
+            required
+          />
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-court btn-lg mt-2">
+        <i class="bi bi-person-check me-1"></i> Create Account
+      </button>
+    </form>
+
+    <p class="text-center mt-4 mb-0 text-muted">
+      Already have an account?
+      <a href="{{ url_for('login') }}">Log in here</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

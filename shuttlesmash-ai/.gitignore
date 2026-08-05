@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Database
+instance/*.db
+
+# User-generated content
+static/uploads/*
+!static/uploads/.gitkeep
+static/processed/*
+!static/processed/.gitkeep
+static/charts/*
+!static/charts/.gitkeep
+reports/*
+!reports/.gitkeep
+
+# ML dataset & model artifacts (Phase 5) -- regenerated per installation
+dataset/extracted_features/*
+!dataset/extracted_features/.gitkeep
+!dataset/extracted_features/README.md
+dataset/labels/*
+!dataset/labels/.gitkeep
+!dataset/labels/README.md
+dataset/train/*
+!dataset/train/.gitkeep
+!dataset/train/README.md
+dataset/validation/*
+!dataset/validation/.gitkeep
+!dataset/validation/README.md
+dataset/test/*
+!dataset/test/.gitkeep
+!dataset/test/README.md
+dataset/raw_videos/*
+!dataset/raw_videos/.gitkeep
+!dataset/raw_videos/README.md
+models/*
+!models/.gitkeep
+!models/README.md
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+dataset/

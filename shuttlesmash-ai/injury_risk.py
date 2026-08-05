@@ -1,0 +1,410 @@
+warning: in the working copy of '.\modules\injury_risk.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.\modules\recommendation_engine.py', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git "a/.\\modules\\injury_risk.py" "b/.\\modules\\recommendation_engine.py"[m
+[1mindex b422373..a44b83e 100644[m
+[1m--- "a/.\\modules\\injury_risk.py"[m
+[1m+++ "b/.\\modules\\recommendation_engine.py"[m
+[36m@@ -1,320 +1,94 @@[m
+ """[m
+[31m-modules/injury_risk.py[m
+[31m-------------------------[m
+[31m-Rule-based (NOT machine learning) injury-risk detection for badminton[m
+[31m-players, built entirely on top of the joint angles and movement metrics[m
+[31m-already computed in Phase 3 (modules/angle_calculator.py and the[m
+[31m-footwork/smash/jump/lunge analysis modules).[m
+[31m-[m
+[31m-Why rules instead of ML? Two reasons, both worth explaining in a viva:[m
+[31m-  1. No labeled injury dataset exists yet to train a classifier on --[m
+[31m-     that's exactly what Phase 3's modules/feature_builder.py is[m
+[31m-     preparing the ground for. Once enough analyzed videos exist, a[m
+[31m-     later phase can revisit this with a trained Random Forest.[m
+[31m-  2. Rule-based thresholds are fully explainable: every flagged risk can[m
+[31m-     be traced back to one specific number crossing one specific,[m
+[31m-     documented threshold -- exactly what a viva panel will want[m
+[31m-     justified.[m
+[31m-[m
+[31m-IMPORTANT LIMITATION (stated here, not hidden): every angle in this app[m
+[31m-is measured in 2D from a single, uncalibrated camera. True clinical[m
+[31m-"knee valgus" is a frontal-plane (side-to-side) measurement; without a[m
+[31m-second camera or calibration, this module uses LEFT/RIGHT ASYMMETRY as[m
+[31m-an explainable proxy for valgus-type loading patterns instead of[m
+[31m-claiming a real frontal-plane angle. This limitation is repeated in each[m
+[31m-risk's own description so nothing here overclaims clinical accuracy.[m
+[32m+[m[32mmodules/recommendation_engine.py[m
+[32m+[m[32m-----------------------------------[m
+[32m+[m[32mTurns detected injury risks (from modules/injury_risk.py) into short,[m
+[32m+[m[32mplain-English coaching recommendations.[m
+[32m+[m
+[32m+[m[32mThis is a simple lookup-table approach (risk_type -> recommendation[m
+[32m+[m[32mtext) -- deliberately NOT machine learning, so every recommendation[m
+[32m+[m[32mshown to a player can be traced straight back to one specific rule,[m
+[32m+[m[32mwhich is easy to explain and defend in a viva.[m
+ """[m
+ [m
+[31m-from typing import Dict, List, Optional[m
+[31m-[m
+[31m-# ---------------------------------------------------------------------[m
+[31m-# Thresholds -- kept as named constants (not magic numbers buried in[m
+[31m-# logic) so they're easy to find, justify in a viva, and tune later.[m
+[31m-# ---------------------------------------------------------------------[m
+[31m-[m
+[31m-KNEE_ASYMMETRY_LOW_DEG = 15.0[m
+[31m-KNEE_ASYMMETRY_HIGH_DEG = 25.0[m
+[31m-[m
+[31m-POOR_LANDING_KNEE_ANGLE_LOW_DEG = 160.0   # a near-straight knee absorbs less shock[m
+[31m-POOR_LANDING_KNEE_ANGLE_HIGH_DEG = 172.0[m
+[31m-[m
+[31m-SHOULDER_OVEREXTENSION_LOW_DEG = 170.0[m
+[31m-SHOULDER_OVEREXTENSION_HIGH_DEG = 178.0[m
+[31m-[m
+[31m-LUNGE_KNEE_OVER_TOE_LOW = 0.06   # normalized image-width units[m
+[31m-LUNGE_KNEE_OVER_TOE_HIGH = 0.12[m
+[31m-[m
+[31m-HIP_KNEE_ASYMMETRY_LOW_DEG = 12.0[m
+[31m-HIP_KNEE_ASYMMETRY_HIGH_DEG = 20.0[m
+[31m-[m
+[31m-# Used by calculate_overall_score() -- how many points a detected risk[m
+[31m-# subtracts from a starting score of 100, based on its severity.[m
+[31m-_SCORE_PENALTY = {"High": 30, "Moderate": 15, "Low": 5}[m
+[31m-[m
+[31m-[m
+[31m-def _get_avg(angle_summary: Dict, key: str) -> Optional[float]:[m
+[31m-    """Safely pull an angle's average value out of the aggregate dict[m
+[31m-    built by angle_calculator.aggregate_angles(), or None if missing."""[m
+[31m-    stats = angle_summary.get(key)[m
+[31m-    return stats.get("avg") if stats else None[m
+[31m-[m
+[31m-[m
+[31m-def _level_and_confidence(value: float, low: float, high: float) -> Optional[Dict]:[m
+[31m-    """[m
+[31m-    Shared helper: turn one raw measurement into a (risk_level,[m
+[31m-    confidence) pair given a "Low" threshold and a "High" threshold.[m
+[31m-[m
+[31m-    - Below `low`: not flagged at all (returns None).[m
+[31m-    - Between `low` and `high`: "Low" or "Moderate", depending on how[m
+[31m-      far past `low` the value has gotten.[m
+[31m-    - At or above `high`: "High".[m
+[31m-[m
+[31m-    `confidence` is a simple, transparent 0-100 score reflecting how far[m
+[31m-    past the threshold the value sits (capped at 100) -- NOT a[m
+[31m-    statistical probability, just an explainable "how clearly did this[m
+[31m-    cross the line" indicator appropriate for a rule-based system.[m
+[31m-    """[m
+[31m-    if value < low:[m
+[31m-        return None[m
+[31m-[m
+[31m-    span = max(high - low, 0.01)[m
+[31m-    progress = min((value - low) / span, 1.5)  # allow some overshoot past "high"[m
+[31m-[m
+[31m-    if value >= high:[m
+[31m-        level = "High"[m
+[31m-    elif progress >= 0.5:[m
+[31m-        level = "Moderate"[m
+[31m-    else:[m
+[31m-        level = "Low"[m
+[31m-[m
+[31m-    confidence = round(min(50 + progress * 50, 100), 1)[m
+[31m-    return {"risk_level": level, "confidence": confidence}[m
+[31m-[m
+[31m-[m
+[31m-def _check_knee_valgus(angle_summary: Dict) -> Optional[Dict]:[m
+[31m-    """[m
+[31m-    Proxy check: sustained left/right KNEE angle asymmetry across the[m
+[31m-    video. See this module's docstring for why asymmetry (not a true[m
+[31m-    frontal-plane angle) is used as the signal here.[m
+[31m-    """[m
+[31m-    left = _get_avg(angle_summary, "left_knee_angle")[m
+[31m-    right = _get_avg(angle_summary, "right_knee_angle")[m
+[31m-    if left is None or right is None:[m
+[31m-        return None[m
+[31m-[m
+[31m-    diff = abs(left - right)[m
+[31m-    verdict = _level_and_confidence(diff, KNEE_ASYMMETRY_LOW_DEG, KNEE_ASYMMETRY_HIGH_DEG)[m
+[31m-    if verdict is None:[m
+[31m-        return None[m
+[31m-[m
+[31m-    return {[m
+[31m-        "risk_type": "Knee Valgus Risk",[m
+[31m-        "affected_joint": "Knee",[m
+[31m-        "risk_level": verdict["risk_level"],[m
+[31m-        "confidence": verdict["confidence"],[m
+[31m-        "description": ([m
+[31m-            f"Left and right knee angles differ by {diff:.1f} deg on average "[m
+[31m-            "across the video. Sustained left/right knee asymmetry is used "[m
+[31m-            "here as an explainable proxy for uneven loading associated "[m
+[31m-            "with knee valgus (inward knee collapse) patterns -- a true "[m
+[31m-            "frontal-plane valgus angle would need a front-facing or "[m
+[31m-            "multi-camera setup."[m
+[31m-        ),[m
+[31m-    }[m
+[31m-[m
+[31m-[m
+[31m-def _check_poor_landing(movement_metrics: Dict, video_type: str) -> Optional[Dict]:[m
+[31m-    """[m
+[31m-    Only meaningful for 'jump' videos: a near-straight landing knee[m
+[31m-    (little flexion) absorbs less shock than a bent-knee landing, a[m
+[31m-    well-established landing-mechanics injury-risk pattern.[m
+[31m-    """[m
+[31m-    if video_type != "jump":[m
+[31m-        return None[m
+[31m-[m
+[31m-    landing_angle = movement_metrics.get("landing_knee_angle")[m
+[31m-    if landing_angle is None:[m
+[31m-        return None[m
+[31m-[m
+[31m-    verdict = _level_and_confidence([m
+[31m-        landing_angle, POOR_LANDING_KNEE_ANGLE_LOW_DEG, POOR_LANDING_KNEE_ANGLE_HIGH_DEG[m
+[31m-    )[m
+[31m-    if verdict is None:[m
+[31m-        return None[m
+[31m-[m
+[31m-    return {[m
+[31m-        "risk_type": "Poor Landing Technique",[m
+[31m-        "affected_joint": "Knee",[m
+[31m-        "risk_level": verdict["risk_level"],[m
+[31m-        "confidence": verdict["confidence"],[m
+[31m-        "description": ([m
+[31m-            f"The landing knee angle reached {landing_angle:.1f} deg (close "[m
+[31m-            "to fully straight). Landing with a straighter knee absorbs "[m
+[31m-            "less impact and increases stress through the joint -- bending "[m
+[31m-            "the knee more on landing spreads the impact over a longer "[m
+[31m-            "time."[m
+[31m-        ),[m
+[31m-    }[m
+[31m-[m
+[31m-[m
+[31m-def _check_shoulder_overextension(angle_summary: Dict) -> Optional[Dict]:[m
+[31m-    """[m
+[31m-    Checks whether either shoulder reaches a near-fully-extended peak[m
+[31m-    angle. Repeated overextension during smashes is a known contributor[m
+[31m-    to shoulder impingement / rotator-cuff strain.[m
+[31m-    """[m
+[31m-    left_stats = angle_summary.get("left_shoulder_angle") or {}[m
+[31m-    right_stats = angle_summary.get("right_shoulder_angle") or {}[m
+[31m-    left_max = left_stats.get("max")[m
+[31m-    right_max = right_stats.get("max")[m
+[31m-    candidates = [v for v in (left_max, right_max) if v is not None][m
+[31m-    if not candidates:[m
+[31m-        return None[m
+[31m-[m
+[31m-    peak = max(candidates)[m
+[31m-    side = "left" if left_max == peak else "right"[m
+[31m-[m
+[31m-    verdict = _level_and_confidence([m
+[31m-        peak, SHOULDER_OVEREXTENSION_LOW_DEG, SHOULDER_OVEREXTENSION_HIGH_DEG[m
+[31m-    )[m
+[31m-    if verdict is None:[m
+[31m-        return None[m
+[31m-[m
+[31m-    return {[m
+[31m-        "risk_type": "Shoulder Overextension",[m
+[31m-        "affected_joint": f"Shoulder ({side})",[m
+[31m-        "risk_level": verdict["risk_level"],[m
+[31m-        "confidence": verdict["confidence"],[m
+[31m-        "description": ([m
+[31m-            f"The {side} shoulder reached a peak angle of {peak:.1f} deg "[m
+[31m-            "(near full extension) during the video. Repeated overextension "[m
+[31m-            "of the hitting arm, especially during smashes, is associated "[m
+[31m-            "with shoulder impingement and rotator-cuff strain over time."[m
+[31m-        ),[m
+[31m-    }[m
+[31m-[m
+[31m-[m
+[31m-def _check_lunge_overreach(movement_metrics: Dict, video_type: str) -> Optional[Dict]:[m
+[31m-    """[m
+[31m-    Only meaningful for 'lunge' videos: how far the front knee travels[m
+[31m-    past the front ankle at the deepest point of the lunge. Excessive[m
+[31m-    forward knee travel increases shear stress on the knee joint.[m
+[31m-    """[m
+[31m-    if video_type != "lunge":[m
+[31m-        return None[m
+[31m-[m
+[31m-    offset = movement_metrics.get("knee_over_toe_offset")[m
+[31m-    if offset is None:[m
+[31m-        return None[m
+[31m-[m
+[31m-    magnitude = abs(offset)[m
+[31m-    verdict = _level_and_confidence([m
+[31m-        magnitude, LUNGE_KNEE_OVER_TOE_LOW, LUNGE_KNEE_OVER_TOE_HIGH[m
+[31m-    )[m
+[31m-    if verdict is None:[m
+[31m-        return None[m
+[31m-[m
+[31m-    return {[m
+[31m-        "risk_type": "Lunge Overreach",[m
+[31m-        "affected_joint": "Knee / Ankle",[m
+[31m-        "risk_level": verdict["risk_level"],[m
+[31m-        "confidence": verdict["confidence"],[m
+[31m-        "description": ([m
+[31m-            f"At the deepest point of the lunge, the front knee sat "[m
+[31m-            f"{magnitude:.3f} (normalized image-width units) past the "[m
+[31m-            "front ankle. Letting the knee travel too far past the toes "[m
+[31m-            "increases shear stress on the knee joint -- keeping the shin "[m
+[31m-            "closer to vertical reduces this stress."[m
+[31m-        ),[m
+[31m-    }[m
+[31m-[m
+[31m-[m
+[31m-def _check_asymmetrical_loading(angle_summary: Dict) -> Optional[Dict]:[m
+[31m-    """[m
+[31m-    Broader than knee valgus: looks at combined KNEE + HIP angle[m
+[31m-    asymmetry between the two sides of the body across the whole video,[m
+[31m-    as a proxy for consistently favoring/loading one leg more than the[m
+[31m-    other -- a known contributor to overuse injuries.[m
+[31m-    """[m
+[31m-    knee_left = _get_avg(angle_summary, "left_knee_angle")[m
+[31m-    knee_right = _get_avg(angle_summary, "right_knee_angle")[m
+[31m-    hip_left = _get_avg(angle_summary, "left_hip_angle")[m
+[31m-    hip_right = _get_avg(angle_summary, "right_hip_angle")[m
+[31m-[m
+[31m-    diffs = [][m
+[31m-    if knee_left is not None and knee_right is not None:[m
+[31m-        diffs.append(abs(knee_left - knee_right))[m
+[31m-    if hip_left is not None and hip_right is not None:[m
+[31m-        diffs.append(abs(hip_left - hip_right))[m
+[31m-[m
+[31m-    if not diffs:[m
+[31m-        return None[m
+[31m-[m
+[31m-    avg_diff = sum(diffs) / len(diffs)[m
+[31m-    verdict = _level_and_confidence([m
+[31m-        avg_diff, HIP_KNEE_ASYMMETRY_LOW_DEG, HIP_KNEE_ASYMMETRY_HIGH_DEG[m
+[31m-    )[m
+[31m-    if verdict is None:[m
+[31m-        return None[m
+[31m-[m
+[31m-    return {[m
+[31m-        "risk_type": "Asymmetrical Loading",[m
+[31m-        "affected_joint": "Hip & Knee",[m
+[31m-        "risk_level": verdict["risk_level"],[m
+[31m-        "confidence": verdict["confidence"],[m
+[31m-        "description": ([m
+[31m-            f"Hip and knee angles differ between the left and right side "[m
+[31m-            f"by {avg_diff:.1f} deg on average. Consistently favoring one "[m
+[31m-            "side can lead to overuse injuries on the more-loaded leg over "[m
+[31m-            "time -- balanced weight distribution reduces this risk."[m
+[31m-        ),[m
+[31m-    }[m
+[31m-[m
+[31m-[m
+[31m-def detect_risks([m
+[31m-    angle_summary: Dict, movement_metrics: Dict, video_type: str[m
+[31m-) -> List[Dict]:[m
+[31m-    """[m
+[31m-    Run every injury-risk check and return only the ones that triggered.[m
+[32m+[m[32mfrom typing import Dict, List[m
+[32m+[m
+[32m+[m[32m# risk_type -> base recommendation text. The same message is used[m
+[32m+[m[32m# regardless of risk_level; `priority` (below) is what actually scales[m
+[32m+[m[32m# with severity, since the advice itself doesn't change -- only how[m
+[32m+[m[32m# urgently it should be followed.[m
+[32m+[m[32m_RECOMMENDATION_TEXT = {[m
+[32m+[m[32m    "Knee Valgus Risk": ([m
+[32m+[m[32m        "Improve knee alignment during landing and lunges -- focus on "[m
+[32m+[m[32m        "keeping the knee tracking in line with the toes."[m
+[32m+[m[32m    ),[m
+[32m+[m[32m    "Poor Landing Technique": ([m
+[32m+[m[32m        "Increase knee flexion while landing to absorb impact more "[m
+[32m+[m[32m        "gradually and reduce joint stress."[m
+[32m+[m[32m    ),[m
+[32m+[m[32m    "Shoulder Overextension": ([m
+[32m+[m[32m        "Reduce arm extension during the smash and focus on generating "[m
+[32m+[m[32m        "power through trunk rotation instead."[m
+[32m+[m[32m    ),[m
+[32m+[m[32m    "Lunge Overreach": ([m
+[32m+[m[32m        "Shorten the lunge slightly so the front knee stays closer above "[m
+[32m+[m[32m        "the ankle, reducing shear stress on the knee."[m
+[32m+[m[32m    ),[m
+[32m+[m[32m    "Asymmetrical Loading": ([m
+[32m+[m[32m        "Work on balanced footwork drills so both legs share the load "[m
+[32m+[m[32m        "evenly instead of favoring one side."[m
+[32m+[m[32m    ),[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m# risk_type -> which broad category this recommendation falls under.[m
+[32m+[m[32m_RECOMMENDATION_CATEGORY = {[m
+[32m+[m[32m    "Knee Valgus Risk": "Injury Prevention",[m
+[32m+[m[32m    "Poor Landing Technique": "Technique",[m
+[32m+[m[32m    "Shoulder Overextension": "Technique",[m
+[32m+[m[32m    "Lunge Overreach": "Injury Prevention",[m
+[32m+[m[32m    "Asymmetrical Loading": "Fitness",[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m# risk_level -> recommendation priority. High risk = High priority to[m
+[32m+[m[32m# act on; Low risk still gets a Low-priority reminder rather than being[m
+[32m+[m[32m# silently dropped.[m
+[32m+[m[32m_PRIORITY_BY_RISK_LEVEL = {[m
+[32m+[m[32m    "High": "High",[m
+[32m+[m[32m    "Moderate": "Medium",[m
+[32m+[m[32m    "Low": "Low",[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef generate_recommendations(risks: List[Dict]) -> List[Dict]:[m
+[32m+[m[32m    """[m
+[32m+[m[32m    Convert a list of detected risks into a list of recommendations.[m
+ [m
+     Args:[m
+[31m-        angle_summary: output of angle_calculator.aggregate_angles().[m
+[31m-        movement_metrics: output of the video-type-specific analysis[m
+[31m-            module (empty dict for 'general' videos).[m
+[31m-        video_type: 'smash' / 'footwork' / 'jump' / 'lunge' / 'general'.[m
+[32m+[m[32m        risks: the list returned by modules/injury_risk.py's[m
+[32m+[m[32m            detect_risks(), each with at least "risk_type" and[m
+[32m+[m[32m            "risk_level".[m
+ [m
+     Returns:[m
+[31m-        A list of risk dicts, each shaped:[m
+[31m-            {[m
+[31m-                "risk_type": str, "affected_joint": str,[m
+[31m-                "risk_level": "Low" | "Moderate" | "High",[m
+[31m-                "confidence": float (0-100), "description": str,[m
+[31m-            }[m
+[31m-        Empty list if no risks were detected (or there wasn't enough[m
+[31m-        data to check -- e.g. no person was detected in the video).[m
+[32m+[m[32m        A list of dicts, each shaped:[m
+[32m+[m[32m            {"category": str, "recommendation": str, "priority": str}[m
+[32m+[m[32m        One recommendation per detected risk, in the same order. Risk[m
+[32m+[m[32m        types not found in the lookup table are skipped (rather than[m
+[32m+[m[32m        crashing), so this stays robust if injury_risk.py ever adds a[m
+[32m+[m[32m        new risk_type before this file is updated to match.[m
+     """[m
+[31m-    checks = [[m
+[31m-        _check_knee_valgus(angle_summary),[m
+[31m-        _check_poor_landing(movement_metrics, video_type),[m
+[31m-        _check_shoulder_overextension(angle_summary),[m
+[31m-        _check_lunge_overreach(movement_metrics, video_type),[m
+[31m-        _check_asymmetrical_loading(angle_summary),[m
+[31m-    ][m
+[31m-    return [risk for risk in checks if risk is not None][m
+[32m+[m[32m    recommendations = [][m
+ [m
+[32m+[m[32m    for risk in risks:[m
+[32m+[m[32m        risk_type = risk.get("risk_type")[m
+[32m+[m[32m        text = _RECOMMENDATION_TEXT.get(risk_type)[m
+[32m+[m[32m        if text is None:[m
+[32m+[m[32m            continue  # unknown risk type -- skip rather than guess[m
+ [m
+[31m-def calculate_overall_score(risks: List[Dict]) -> float:[m
+[31m-    """[m
+[31m-    Turn a list of detected risks into a single 0-100 "overall technique[m
+[31m-    safety score" for the dashboard: 100 = no risks detected, reduced by[m
+[31m-    a fixed penalty per risk depending on its severity (see[m
+[31m-    _SCORE_PENALTY above).[m
+[32m+[m[32m        recommendations.append([m
+[32m+[m[32m            {[m
+[32m+[m[32m                "category": _RECOMMENDATION_CATEGORY.get(risk_type, "General"),[m
+[32m+[m[32m                "recommendation": text,[m
+[32m+[m[32m                "priority": _PRIORITY_BY_RISK_LEVEL.get(risk.get("risk_level"), "Medium"),[m
+[32m+[m[32m            }[m
+[32m+[m[32m        )[m
+ [m
+[31m-    This is a simple, transparent, rule-based scale -- not a trained[m
+[31m-    model -- so a viva panel can see exactly how any given score was[m
+[31m-    produced.[m
+[31m-    """[m
+[31m-    score = 100.0[m
+[31m-    for risk in risks:[m
+[31m-        score -= _SCORE_PENALTY.get(risk.get("risk_level"), 10)[m
+[31m-    return max(0.0, round(score, 1))[m
+[32m+[m[32m    return recommendations[m

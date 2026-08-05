@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}History — ShuttleSmash AI{% endblock %}
+
+{% block content %}
+
+<div class="container py-5">
+
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <div>
+      <div class="section-eyebrow mb-1">ShuttleSmash AI</div>
+      <h2 class="mb-1">Analysis History</h2>
+      <p class="text-muted mb-0">
+        View all your previously uploaded and analyzed videos.
+      </p>
+    </div>
+
+    <a href="{{ url_for('upload') }}" class="btn btn-shuttle">
+      <i class="bi bi-cloud-upload me-1"></i>
+      New Analysis
+    </a>
+  </div>
+
+  {% if videos %}
+
+    <div class="row g-4">
+
+      {% for video in videos %}
+
+        <div class="col-md-6 col-lg-4">
+
+          <div class="card session-card fade-up h-100">
+
+            <div class="session-thumb">
+
+              {% if video.status == "completed" %}
+                <span class="status-pill pill-success session-badge">
+                  Completed
+                </span>
+              {% elif video.status == "failed" %}
+                <span class="status-pill pill-danger session-badge">
+                  Failed
+                </span>
+              {% elif video.status == "processing" %}
+                <span class="status-pill pill-warning session-badge">
+                  Processing
+                </span>
+              {% else %}
+                <span class="status-pill pill-neutral session-badge">
+                  Uploaded
+                </span>
+              {% endif %}
+
+              <div class="session-thumb-placeholder">
+                <i class="bi bi-person-bounding-box"></i>
+              </div>
+
+            </div>
+
+            <div class="p-3">
+
+              <div
+                class="fw-semibold text-truncate"
+                style="color:var(--ink);"
+                title="{{ video.original_name }}"
+              >
+                {{ video.original_name }}
+              </div>
+
+              <div class="text-muted small mb-3">
+                {{ video.video_type|capitalize }}
+                &bull;
+                {{ video.uploaded_at.split(' ')[0] if video.uploaded_at else '—' }}
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center">
+
+                <span class="status-pill pill-neutral">
+                  <i class="bi bi-camera-video"></i>
+                  {{ video.status|capitalize }}
+                </span>
+
+                {% if video.status == "completed" %}
+                  <a
+                    href="{{ url_for('view_video_result', video_id=video.id) }}"
+                    class="btn btn-sm btn-court"
+                  >
+                    View Report
+                  </a>
+                {% else %}
+                  <span class="text-muted small">
+                    Not available
+                  </span>
+                {% endif %}
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      {% endfor %}
+
+    </div>
+
+  {% else %}
+
+    <div class="empty-state fade-up">
+
+      <div class="empty-state-icon">
+        <i class="bi bi-clock-history"></i>
+      </div>
+
+      <h5>No analysis history yet</h5>
+
+      <p>
+        Upload your first badminton video to start building your analysis history.
+      </p>
+
+      <a href="{{ url_for('upload') }}" class="btn btn-shuttle mt-2">
+        <i class="bi bi-cloud-upload me-1"></i>
+        Upload Your First Video
+      </a>
+
+    </div>
+
+  {% endif %}
+
+</div>
+
+{% endblock %}

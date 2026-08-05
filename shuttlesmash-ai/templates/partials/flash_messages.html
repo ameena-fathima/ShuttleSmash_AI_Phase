@@ -1,0 +1,18 @@
+{# 
+  partials/flash_messages.html
+  -----------------------------
+  Renders any Flask flash() messages as dismissible Bootstrap alerts.
+  Included once from base.html so every page gets this behaviour for free.
+#}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="container mt-3">
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show glass-alert" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
